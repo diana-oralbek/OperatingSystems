@@ -5,8 +5,7 @@
 #define MAX_WAYPOINTS   50
 
 /* Each waypoint stores sensor readings plus the rover's position
-   at the moment it was recorded — teammates can extend this struct
-   with heading, signal strength, soil type, etc. */
+   at the moment it was recorded. */
 typedef struct {
     int32_t     x_cm;
     int32_t     y_cm;

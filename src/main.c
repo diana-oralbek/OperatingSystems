@@ -62,7 +62,7 @@ int main(void)
     xTaskCreate(vPowerTask,        "Power",    STACK_POWER,         NULL,
                 PRIORITY_POWER,          &xPowerTaskHandle);
 
-    /* ── Step 6: Seed RNG for simulation variance ───────────── */
+    /* ── Step 6: Seed RNG ───────────────────────────────────── */
     srand((unsigned int)time(NULL));
 
     /* ── Step 7: Start scheduler ────────────────────────────── */

@@ -2,18 +2,8 @@
 #include "motor.h"
 #include <stdlib.h>     /* rand() */
 
-/* ================================================================
- *  SIMULATED ENVIRONMENT
- *  In real hardware the obstacle distance comes from the sensor
- *  hardware and lives in xSharedSensorData.  Here, sensor.c is
- *  intentionally kept simple (fixed placeholder values), so the
- *  motor task maintains its own physics model to make movement feel
- *  dynamic during the simulation phase.
- *
- *  Teammates: replace this block with real sensor reads once the
- *  sensor HAL is wired up — then delete simObstacleDist entirely
- *  and use xSharedSensorData.distance_cm instead.
- * ================================================================ */
+/* Obstacle distance is managed by the motor's own physics model.
+ * Moving forward decreases it, backward increases it, turning resets it. */
 #define SIM_DIST_INITIAL_CM     200
 #define SIM_DIST_MIN_CM          20
 #define SIM_DIST_MAX_CM         500
@@ -34,16 +24,13 @@ static const char *headingToStr(int32_t deg)
 }
 
 /* ── Odometry update ────────────────────────────────────────────
- *  Called after every command execution.
- *  - Updates x/y position using a 4-direction dead-reckoning model.
- *  - Drives simObstacleDist to reflect approaching/retreating.
- *  - Clamps distance to physical limits.
+ *  Updates x/y position (dead-reckoning) and obstacle distance
+ *  based on the executed command. Clamps distance to valid range.
  * ─────────────────────────────────────────────────────────────── */
 static void updateOdometry(const MotorCommand_t *cmd)
 {
-    /* Rough estimate: 100% speed for 1000 ms ≈ 100 cm traveled */
+    /* 100% speed for 1000 ms ≈ 100 cm traveled; ±10 cm terrain variation */
     uint32_t moved_cm = (cmd->speed * cmd->duration_ms) / 1000;
-    /* Terrain variation: ±10 cm so values never feel robotic */
     int32_t  terrain  = (rand() % 21) - 10;
 
     if (xSemaphoreTake(xOdometryMutex, pdMS_TO_TICKS(50)) != pdTRUE)
@@ -52,7 +39,6 @@ static void updateOdometry(const MotorCommand_t *cmd)
     switch (cmd->type)
     {
         case CMD_MOVE_FORWARD:
-            /* Closing in on whatever is ahead */
             simObstacleDist -= (int32_t)moved_cm + terrain;
 
             switch (xRoverOdometry.heading_deg) {
@@ -65,7 +51,6 @@ static void updateOdometry(const MotorCommand_t *cmd)
             break;
 
         case CMD_MOVE_BACKWARD:
-            /* Retreating — obstacle falls further away */
             simObstacleDist += (int32_t)moved_cm + terrain;
 
             switch (xRoverOdometry.heading_deg) {
@@ -79,8 +64,6 @@ static void updateOdometry(const MotorCommand_t *cmd)
 
         case CMD_TURN_LEFT:
             xRoverOdometry.heading_deg = (xRoverOdometry.heading_deg - 90 + 360) % 360;
-            /* Turning reveals a new line of sight:
-               if blocked, pick a fresh random clear distance */
             if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
                 simObstacleDist = 150 + (rand() % 120);
             else
@@ -97,8 +80,6 @@ static void updateOdometry(const MotorCommand_t *cmd)
 
         case CMD_STOP:
         case CMD_EMERGENCY_STOP:
-            /* Stationary: slowly recover distance so the next FORWARD
-               command doesn't immediately re-trigger the obstacle event */
             if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
                 simObstacleDist += 20 + (rand() % 30);
             break;
@@ -112,8 +93,7 @@ static void updateOdometry(const MotorCommand_t *cmd)
 }
 
 /* ── Position report ────────────────────────────────────────────
- *  Printed after every movement so the operator can track the
- *  rover's location relative to its launch point at a glance.
+ *  Printed after every movement command.
  * ─────────────────────────────────────────────────────────────── */
 static void printPosition(void)
 {
@@ -129,13 +109,17 @@ static void printPosition(void)
 
     float originDist = roverOriginDistance();
 
-    printf("[Motor] Pos:(%ld, %ld)cm  Heading:%s  "
-           "From origin:%.1fcm  Path:%lucm  Obstacle:%ldcm\n",
+
+    printf("[Motor] Pos:(%ld, %ld)cm  Heading:%s  Path:%lucm  Obstacle:%ldcm\n",
            (long)x, (long)y,
+
+
            headingToStr(hdg),
-           originDist,
            (unsigned long)total,
            (long)simObstacleDist);
+
+
+           printf("[Motor] >> Distance from start: %.1f cm\n", originDist);
 }
 
 /* ── Command execution ──────────────────────────────────────── */
@@ -190,6 +174,11 @@ void vMotorTask(void *pvParameters)
             {
                 executeMotorCommand(&cmd);
                 updateOdometry(&cmd);
+
+                /* Show distance from origin only when rover is actually moving */
+                if (cmd.type == CMD_MOVE_FORWARD || cmd.type == CMD_MOVE_BACKWARD)
+
+                
                 printPosition();
 
                 /* Signal obstacle event if too close after a forward move */
