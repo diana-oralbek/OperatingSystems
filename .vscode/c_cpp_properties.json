@@ -1,19 +1,16 @@
 {
     "configurations": [
         {
-            "name": "Mac",
+            "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/FreeRTOS-Kernel/include",
                 "${workspaceFolder}/FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix"
             ],
             "defines": [],
-            "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
-            ],
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "C:/Users/user/mingw64/bin/gcc.exe",
             "cStandard": "c99",
-            "intelliSenseMode": "macos-gcc-arm64"
+            "intelliSenseMode": "windows-gcc-x64"
         }
     ],
     "version": 4

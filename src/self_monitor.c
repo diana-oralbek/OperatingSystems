@@ -1,5 +1,6 @@
 #include "system.h"
 #include "self_monitor.h"
+#include "sensor.h"
 
 void vSelfMonitorTask(void *pvParameters)
 {
@@ -38,6 +39,11 @@ void vSelfMonitorTask(void *pvParameters)
             xEventGroupSetBits(xSystemEventGroup, EVENT_SENSOR_FAULT);
             sendStatusReport("SelfMonitor", STATUS_ERROR, 12,
                              "Sensor heartbeat lost");
+            vTaskDelete(xSensorTaskHandle);
+            xSensorTaskHandle = NULL;
+            xTaskCreate(vSensorTask, "Sensor", STACK_SENSOR, NULL,
+                        PRIORITY_SENSOR, &xSensorTaskHandle);
+            printf("[SelfMonitor] Sensor task restarted\n");
         }
 
         /* Comms */
