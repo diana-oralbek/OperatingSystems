@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/FreeRTOS-Kernel/include",
+                "${workspaceFolder}/FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix"
+            ],
+            "defines": [],
+            "compilerPath": "C:/Users/user/mingw64/bin/gcc.exe",
+            "cStandard": "c99",
+            "intelliSenseMode": "windows-gcc-x64"
+        }
+    ],
+    "version": 4
+}
