@@ -29,7 +29,7 @@
 #define PRIORITY_SELF_MONITOR   4
 #define PRIORITY_SENSOR         3
 #define PRIORITY_NAVIGATION     2
-#define PRIORITY_POWER          1
+#define PRIORITY_POWER          3
 
 /* ── Queue depths ───────────────────────────────────────────── */
 #define COMMAND_QUEUE_LENGTH    10
@@ -37,16 +37,16 @@
 #define STATUS_QUEUE_LENGTH     15
 
 /* ── Task periods (ms) ──────────────────────────────────────── */
-#define PERIOD_MOTOR_MS         50
-#define PERIOD_SENSOR_MS        100
-#define PERIOD_COMMS_MS         500
-#define PERIOD_NAVIGATION_MS    200
-#define PERIOD_POWER_MS         1000
-#define PERIOD_SELF_MONITOR_MS  500
+#define PERIOD_MOTOR_MS         500
+#define PERIOD_SENSOR_MS        1000
+#define PERIOD_COMMS_MS         2000
+#define PERIOD_NAVIGATION_MS    1500
+#define PERIOD_POWER_MS         3000
+#define PERIOD_SELF_MONITOR_MS  2000
 
 /* ── Thresholds ─────────────────────────────────────────────── */
 #define POWER_BUDGET_MAX        100
-#define HEARTBEAT_TIMEOUT_MS    2000
+#define HEARTBEAT_TIMEOUT_MS    5000
 
 /* ── Event group bits ───────────────────────────────────────── */
 #define EVENT_OBSTACLE_DETECTED   ( 1 << 0 )

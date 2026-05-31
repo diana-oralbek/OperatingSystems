@@ -57,6 +57,6 @@ void vMainComputerTask(void *pvParameters)
             xQueueSend(xCommandQueue, &cmd, pdMS_TO_TICKS(100));
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }

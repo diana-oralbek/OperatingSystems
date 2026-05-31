@@ -9,6 +9,46 @@
 #include "power.h"
 #include "self_monitor.h"
 
+static void runSelfTests(void)
+{
+    printf("\n=== Self Tests ===\n");
+
+    /* Test 1: command queue */
+    MotorCommand_t cmd      = { CMD_STOP, 0, 0 };
+    MotorCommand_t received = { 0, 0, 0 };
+    xQueueSend(xCommandQueue, &cmd, 0);
+    if (xQueueReceive(xCommandQueue, &received, 0) == pdTRUE &&
+        received.type == CMD_STOP)
+        printf("[TEST] Command queue:  PASS\n");
+    else
+        printf("[TEST] Command queue:  FAIL\n");
+
+    /* Test 2: sensor mutex */
+    if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        xSemaphoreGive(xSensorDataMutex);
+        printf("[TEST] Sensor mutex:   PASS\n");
+    } else {
+        printf("[TEST] Sensor mutex:   FAIL\n");
+    }
+
+    /* Test 3: event group set/clear */
+    xEventGroupSetBits(xSystemEventGroup, EVENT_OBSTACLE_DETECTED);
+    EventBits_t bits = xEventGroupGetBits(xSystemEventGroup);
+    xEventGroupClearBits(xSystemEventGroup, EVENT_OBSTACLE_DETECTED);
+    if (bits & EVENT_OBSTACLE_DETECTED)
+        printf("[TEST] Event group:    PASS\n");
+    else
+        printf("[TEST] Event group:    FAIL\n");
+
+    /* Test 4: odometry initialised to origin */
+    if (xRoverOdometry.x_cm == 0 && xRoverOdometry.y_cm == 0)
+        printf("[TEST] Odometry init:  PASS\n");
+    else
+        printf("[TEST] Odometry init:  FAIL\n");
+
+    printf("=== Tests Done ===\n\n");
+}
+
 int main(void)
 {
     printf("==============================================\n");
@@ -65,7 +105,10 @@ int main(void)
     /* ── Step 6: Seed RNG ───────────────────────────────────── */
     srand((unsigned int)time(NULL));
 
-    /* ── Step 7: Start scheduler ────────────────────────────── */
+    /* ── Step 7: Self-tests (IPC smoke check before scheduler) ─ */
+    runSelfTests();
+
+    /* ── Step 8: Start scheduler ────────────────────────────── */
     printf("[Main] All tasks created. Starting scheduler...\n");
     vTaskStartScheduler();
 

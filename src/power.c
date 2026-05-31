@@ -35,7 +35,7 @@ static uint32_t estimatePowerUsage(void)
         power += POWER_COMMS_COST;
 
     /* Cold temperature degrades battery efficiency */
-    if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(50)) == pdTRUE)
+    if (xSemaphoreTake(xSensorDataMutex, pdMS_TO_TICKS(10)) == pdTRUE)
     {
         if (xSharedSensorData.temperature < COLD_THRESHOLD_FIXEDPT)
             power += COLD_PENALTY;
