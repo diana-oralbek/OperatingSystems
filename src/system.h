@@ -21,6 +21,7 @@
 #define STACK_SENSOR            256
 #define STACK_NAVIGATION        512
 #define STACK_POWER             128
+#define STACK_MCT               256
 
 /* ── Task priorities ────────────────────────────────────────── */
 #define PRIORITY_MAIN_COMPUTER  7
@@ -30,6 +31,7 @@
 #define PRIORITY_SENSOR         3
 #define PRIORITY_NAVIGATION     2
 #define PRIORITY_POWER          3
+#define PRIORITY_MCT            1
 
 /* ── Queue depths ───────────────────────────────────────────── */
 #define COMMAND_QUEUE_LENGTH    10
@@ -102,7 +104,7 @@ typedef struct {
 
 typedef enum {
     HB_MAIN = 0, HB_MOTOR, HB_COMMS,
-    HB_MONITOR, HB_SENSOR, HB_NAV, HB_POWER
+    HB_MONITOR, HB_SENSOR, HB_NAV, HB_POWER, HB_MCT
 } HeartbeatIndex_t;
 
 /* ── Shared resource handles (defined in system.c) ──────────── */
@@ -123,9 +125,10 @@ extern TaskHandle_t         xSelfMonitorHandle;
 extern TaskHandle_t         xSensorTaskHandle;
 extern TaskHandle_t         xNavigationHandle;
 extern TaskHandle_t         xPowerTaskHandle;
+extern TaskHandle_t         xMCTHandle;
 
 extern SensorData_t         xSharedSensorData;
-extern TaskHeartbeat_t      xHeartbeats[7];
+extern TaskHeartbeat_t      xHeartbeats[8];
 
 /* ── Rover odometry — position tracking ─────────────────────── */
 typedef struct {

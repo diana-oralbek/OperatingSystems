@@ -8,6 +8,7 @@
 #include "comms.h"
 #include "power.h"
 #include "self_monitor.h"
+#include "mct.h"
 
 static void runSelfTests(void)
 {
@@ -51,6 +52,8 @@ static void runSelfTests(void)
 
 int main(void)
 {
+    setvbuf(stdout, NULL, _IOLBF, 0);   /* line-buffered even when piped */
+
     printf("==============================================\n");
     printf("  Mars Rover Exploration System — Booting   \n");
     printf("==============================================\n");
@@ -101,6 +104,9 @@ int main(void)
 
     xTaskCreate(vPowerTask,        "Power",    STACK_POWER,         NULL,
                 PRIORITY_POWER,          &xPowerTaskHandle);
+
+    xTaskCreate(vMCTTask,          "MCT",      STACK_MCT,           NULL,
+                PRIORITY_MCT,            &xMCTHandle);
 
     /* ── Step 6: Seed RNG ───────────────────────────────────── */
     srand((unsigned int)time(NULL));

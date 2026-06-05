@@ -19,9 +19,10 @@ TaskHandle_t        xSelfMonitorHandle  = NULL;
 TaskHandle_t        xSensorTaskHandle   = NULL;
 TaskHandle_t        xNavigationHandle   = NULL;
 TaskHandle_t        xPowerTaskHandle    = NULL;
+TaskHandle_t        xMCTHandle          = NULL;
 
 SensorData_t        xSharedSensorData;
-TaskHeartbeat_t     xHeartbeats[7];
+TaskHeartbeat_t     xHeartbeats[8];
 
 RoverOdometry_t     xRoverOdometry  = { 0, 0, 0, 0 };
 SemaphoreHandle_t   xOdometryMutex  = NULL;

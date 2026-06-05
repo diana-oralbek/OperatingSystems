@@ -159,6 +159,7 @@ void vMotorTask(void *pvParameters)
 {
     (void)pvParameters;
 
+    static bool    obstacleWasSet = false;
     MotorCommand_t cmd;
 
     printf("[Motor] Task started\n");
@@ -185,11 +186,17 @@ void vMotorTask(void *pvParameters)
                 if (cmd.type == CMD_MOVE_FORWARD &&
                     simObstacleDist < OBSTACLE_THRESHOLD_CM)
                 {
+                    obstacleWasSet = true;
                     printf("[Motor] Obstacle at %ldcm — alerting MainComputer\n",
                            (long)simObstacleDist);
                     xEventGroupSetBits(xSystemEventGroup, EVENT_OBSTACLE_DETECTED);
                     sendStatusReport("Motor", STATUS_WARNING, 1,
                                      "Obstacle within stopping distance");
+                }
+                else if (cmd.type == CMD_MOVE_FORWARD && obstacleWasSet)
+                {
+                    obstacleWasSet = false;
+                    sendStatusReport("Motor", STATUS_OK, 0, "Path clear");
                 }
 
                 xSemaphoreGive(xMotorMutex);

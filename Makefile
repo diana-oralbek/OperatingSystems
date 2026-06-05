@@ -14,6 +14,7 @@ SRCS = \
 	src/sensor.c \
 	src/system.c \
 	src/main_computer.c \
+	src/mct.c \
 	$(FREERTOS_DIR)/tasks.c \
 	$(FREERTOS_DIR)/queue.c \
 	$(FREERTOS_DIR)/list.c \

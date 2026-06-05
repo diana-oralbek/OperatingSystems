@@ -12,7 +12,7 @@
 #define COLD_THRESHOLD_FIXEDPT  -7000
 #define COLD_PENALTY              10
 /* ±3 units of random measurement noise */
-#define POWER_NOISE_RANGE         6
+#define POWER_NOISE_RANGE        20
 
 static uint32_t estimatePowerUsage(void)
 {
