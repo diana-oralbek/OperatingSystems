@@ -9,6 +9,7 @@
 #include "power.h"
 #include "self_monitor.h"
 #include "mct.h"
+#include "watchdog.h"
 
 static void runSelfTests(void)
 {
@@ -114,7 +115,10 @@ int main(void)
     /* ── Step 7: Self-tests (IPC smoke check before scheduler) ─ */
     runSelfTests();
 
-    /* ── Step 8: Start scheduler ────────────────────────────── */
+    /* ── Step 8: Watchdog timer ────────────────────────────── */
+    initWatchdog();
+
+    /* ── Step 9: Start scheduler ────────────────────────────── */
     printf("[Main] All tasks created. Starting scheduler...\n");
     vTaskStartScheduler();
 

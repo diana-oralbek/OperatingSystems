@@ -1,5 +1,6 @@
 #include "system.h"
 #include "comms.h"
+#include "watchdog.h"
 #include <stdlib.h>
 
 /* Silence duration (ms) before declaring Earth signal lost */
@@ -43,6 +44,7 @@ void vCommsTask(void *pvParameters)
     for (;;)
     {
         updateHeartbeat(HB_COMMS);
+        feedWatchdog();
 
         /* ── Outgoing: drain status queue and transmit to Earth ─── */
         while (xQueueReceive(xStatusQueue, &report, 0) == pdTRUE)
@@ -55,7 +57,7 @@ void vCommsTask(void *pvParameters)
         }
 
         /* ── Incoming: simulate Earth contact window ────────────── */
-        if ((rand() % 100) < COMMS_CONTACT_CHANCE)
+        if (!xFaultComms && (rand() % 100) < COMMS_CONTACT_CHANCE)
         {
             lastContactMs = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
 

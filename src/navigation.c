@@ -1,5 +1,6 @@
 #include "system.h"
 #include "navigation.h"
+#include "watchdog.h"
 
 /* Maximum waypoints held in the ring buffer before oldest is overwritten */
 #define MAX_WAYPOINTS   50
@@ -92,6 +93,7 @@ void vNavigationTask(void *pvParameters)
     for (;;)
     {
         updateHeartbeat(HB_NAV);
+        feedWatchdog();
 
         /* Wait for a fresh sensor reading from xSensorQueue */
         if (xQueueReceive(xSensorQueue, &data, pdMS_TO_TICKS(300)) == pdTRUE)

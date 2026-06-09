@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Compiled binaries
+mars_rover
+*.o
+*.a
+
+# Editor
+.vscode/

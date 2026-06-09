@@ -1,5 +1,6 @@
 #include "system.h"
 #include "sensor.h"
+#include "watchdog.h"
 #include <stdlib.h>
 
 void vSensorTask(void *pvParameters)
@@ -17,6 +18,7 @@ void vSensorTask(void *pvParameters)
     for (;;)
     {
         updateHeartbeat(HB_SENSOR);
+        feedWatchdog();
 
         /* Drift readings slightly each cycle to simulate a real sensor */
         sim_temp += (rand() % 11) - 5;

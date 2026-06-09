@@ -1,5 +1,6 @@
 #include "system.h"
 #include "main_computer.h"
+#include "watchdog.h"
 #include <stdlib.h>
 
 /* Orchestrator — reads system-wide events and issues motor commands.
@@ -19,6 +20,7 @@ void vMainComputerTask(void *pvParameters)
     for (;;)
     {
         updateHeartbeat(HB_MAIN);
+        feedWatchdog();
 
         eventBits = xEventGroupGetBits(xSystemEventGroup);
 

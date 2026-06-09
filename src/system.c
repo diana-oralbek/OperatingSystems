@@ -24,6 +24,9 @@ TaskHandle_t        xMCTHandle          = NULL;
 SensorData_t        xSharedSensorData;
 TaskHeartbeat_t     xHeartbeats[8];
 
+volatile bool       xFaultWatchdog  = false;
+volatile bool       xFaultComms     = false;
+
 RoverOdometry_t     xRoverOdometry  = { 0, 0, 0, 0 };
 SemaphoreHandle_t   xOdometryMutex  = NULL;
 

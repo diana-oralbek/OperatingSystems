@@ -1,10 +1,11 @@
 #include "system.h"
 #include "motor.h"
+#include "watchdog.h"
 #include <stdlib.h>     /* rand() */
 
 /* Obstacle distance is managed by the motor's own physics model.
  * Moving forward decreases it, backward increases it, turning resets it. */
-#define SIM_DIST_INITIAL_CM     200
+#define SIM_DIST_INITIAL_CM      90
 #define SIM_DIST_MIN_CM          20
 #define SIM_DIST_MAX_CM         500
 #define OBSTACLE_THRESHOLD_CM    50
@@ -39,6 +40,13 @@ static void updateOdometry(const MotorCommand_t *cmd)
     switch (cmd->type)
     {
         case CMD_MOVE_FORWARD:
+            /* Clamp movement so rover cannot drive past the obstacle */
+            {
+                int32_t clearance = simObstacleDist - SIM_DIST_MIN_CM;
+                if (clearance < 0) clearance = 0;
+                if ((int32_t)moved_cm > clearance)
+                    moved_cm = (uint32_t)clearance;
+            }
             simObstacleDist -= (int32_t)moved_cm + terrain;
 
             switch (xRoverOdometry.heading_deg) {
@@ -65,7 +73,7 @@ static void updateOdometry(const MotorCommand_t *cmd)
         case CMD_TURN_LEFT:
             xRoverOdometry.heading_deg = (xRoverOdometry.heading_deg - 90 + 360) % 360;
             if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
-                simObstacleDist = 150 + (rand() % 120);
+                simObstacleDist = 250 + (rand() % 150);
             else
                 simObstacleDist += (rand() % 40) - 20;
             break;
@@ -73,7 +81,7 @@ static void updateOdometry(const MotorCommand_t *cmd)
         case CMD_TURN_RIGHT:
             xRoverOdometry.heading_deg = (xRoverOdometry.heading_deg + 90) % 360;
             if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
-                simObstacleDist = 150 + (rand() % 120);
+                simObstacleDist = 250 + (rand() % 150);
             else
                 simObstacleDist += (rand() % 40) - 20;
             break;
@@ -163,10 +171,12 @@ void vMotorTask(void *pvParameters)
     MotorCommand_t cmd;
 
     printf("[Motor] Task started\n");
+    printPosition();   /* report initial position + obstacle distance immediately */
 
     for (;;)
     {
         updateHeartbeat(HB_MOTOR);
+        feedWatchdog();
 
         /* Block waiting for a command from MainComputer (500 ms timeout) */
         if (xQueueReceive(xCommandQueue, &cmd, pdMS_TO_TICKS(500)) == pdTRUE)

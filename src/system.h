@@ -30,7 +30,7 @@
 #define PRIORITY_SELF_MONITOR   4
 #define PRIORITY_SENSOR         3
 #define PRIORITY_NAVIGATION     2
-#define PRIORITY_POWER          3
+#define PRIORITY_POWER          1
 #define PRIORITY_MCT            1
 
 /* ── Queue depths ───────────────────────────────────────────── */
@@ -140,6 +140,10 @@ typedef struct {
 
 extern RoverOdometry_t      xRoverOdometry;
 extern SemaphoreHandle_t    xOdometryMutex;
+
+/* ── Fault injection flags (set via MCT 'fault' command) ────── */
+extern volatile bool xFaultWatchdog;   /* suppress feedWatchdog() in all tasks  */
+extern volatile bool xFaultComms;      /* suppress Earth contact in Comms task  */
 
 /* ── Helper function prototypes (defined in system.c) ───────── */
 void  sendStatusReport(const char *taskName, StatusLevel_t level,

@@ -19,8 +19,70 @@ static void printHelp(void)
     printf("[MCT]  stop\n");
     printf("[MCT]  estop\n");
     printf("[MCT]  status\n");
+    printf("[MCT]  fault <watchdog|comms|motor|sensor>\n");
+    printf("[MCT]  fault clear\n");
     printf("[MCT]  help\n");
     printf("[MCT] =========================================\n\n");
+}
+
+/* ── Fault injection ────────────────────────────────────────── */
+static void handleFault(const char *line)
+{
+    char target[32] = {0};
+    sscanf(line, "%*s %31s", target);   /* skip "fault", read next word */
+
+    if (strcmp(target, "watchdog") == 0)
+    {
+        xFaultWatchdog = true;
+        printf("[MCT] FAULT INJECT: watchdog suppressed — fires in ~8s\n");
+        sendStatusReport("MCT", STATUS_WARNING, 50, "Fault inject: watchdog");
+    }
+    else if (strcmp(target, "comms") == 0)
+    {
+        xFaultComms = true;
+        printf("[MCT] FAULT INJECT: Earth contact suppressed — COMMS LOST in ~3s\n");
+        sendStatusReport("MCT", STATUS_WARNING, 51, "Fault inject: comms lost");
+    }
+    else if (strcmp(target, "motor") == 0)
+    {
+        if (xMotorTaskHandle != NULL)
+        {
+            printf("[MCT] FAULT INJECT: suspending Motor task — SelfMonitor detects in ~5s\n");
+            sendStatusReport("MCT", STATUS_WARNING, 52, "Fault inject: motor freeze");
+            vTaskSuspend(xMotorTaskHandle);
+        }
+    }
+    else if (strcmp(target, "sensor") == 0)
+    {
+        if (xSensorTaskHandle != NULL)
+        {
+            printf("[MCT] FAULT INJECT: suspending Sensor task — SelfMonitor detects in ~5s\n");
+            sendStatusReport("MCT", STATUS_WARNING, 53, "Fault inject: sensor freeze");
+            vTaskSuspend(xSensorTaskHandle);
+        }
+    }
+    else if (strcmp(target, "clear") == 0)
+    {
+        xFaultWatchdog = false;
+        xFaultComms    = false;
+        /* Resume motor/sensor if they were suspended by fault injection */
+        if (xMotorTaskHandle  != NULL &&
+            eTaskGetState(xMotorTaskHandle) == eSuspended)
+            vTaskResume(xMotorTaskHandle);
+        if (xSensorTaskHandle != NULL &&
+            eTaskGetState(xSensorTaskHandle) == eSuspended)
+            vTaskResume(xSensorTaskHandle);
+        xEventGroupClearBits(xSystemEventGroup,
+                             EVENT_EMERGENCY_STOP | EVENT_COMMS_LOST |
+                             EVENT_SENSOR_FAULT   | EVENT_MOTOR_FAULT);
+        printf("[MCT] FAULT CLEAR: all fault flags reset\n");
+        sendStatusReport("MCT", STATUS_OK, 0, "Fault flags cleared");
+    }
+    else
+    {
+        printf("[MCT] Unknown fault target '%s'. "
+               "Use: watchdog | comms | motor | sensor | clear\n", target);
+    }
 }
 
 static void printStatus(void)
@@ -133,6 +195,10 @@ void vMCTTask(void *pvParameters)
         else if (strcmp(word, "status") == 0)
         {
             printStatus();
+        }
+        else if (strcmp(word, "fault") == 0)
+        {
+            handleFault(line);
         }
         else if (strcmp(word, "help") == 0 || strcmp(word, "?") == 0)
         {

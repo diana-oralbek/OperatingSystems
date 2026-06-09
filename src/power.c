@@ -1,5 +1,6 @@
 #include "system.h"
 #include "power.h"
+#include "watchdog.h"
 #include <stdlib.h>
 
 /* Per-subsystem power costs (units) */
@@ -57,6 +58,7 @@ void vPowerTask(void *pvParameters)
     for (;;)
     {
         updateHeartbeat(HB_POWER);
+        feedWatchdog();
 
         estimatedPower = estimatePowerUsage();
 

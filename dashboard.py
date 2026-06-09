@@ -65,9 +65,10 @@ _status_log: collections.deque = collections.deque(maxlen=MAX_LOG)
 _mct_sent:   collections.deque = collections.deque(maxlen=MAX_CMDS)
  
 # obstacle map (list of (x, y) cm coordinates the rover has detected)
-OBSTACLE_RANGE = 50    # cm — a Pos reading closer than this counts as an obstacle
-OBSTACLE_MERGE = 15    # cm — points within this distance are treated as the same obstacle
-MAX_OBSTACLES  = 40
+OBSTACLE_RANGE     = 50    # cm — closer than this triggers OBSTACLE event
+OBSTACLE_MAP_RANGE = 100   # cm — closer than this plots on map
+OBSTACLE_MERGE = 40        # cm — points within this distance are treated as the same obstacle
+MAX_OBSTACLES  = 4
 _obstacles: list = []
  
 # forward unit vector for ANY heading angle (compass bearing: 0°=N=+y, 90°=E=+x)
@@ -78,12 +79,14 @@ def _hdg_vec(deg: float) -> tuple:
 # last-seen timestamp (elapsed s) per task, updated by reader thread
 _last_seen: dict = {k: None for k in [
     'MainComputer', 'Motor', 'Comms', 'SelfMonitor',
-    'Sensor', 'Navigation', 'Power', 'MCT',
+    'Sensor', 'Navigation', 'Power', 'MCT', 'Watchdog',
 ]}
  
 _events: dict = {
-    'OBSTACLE': False, 'LOW_POWER': False, 'COMMS_LOST': False,
+    'OBSTACLE': False, 'OBS_MAPPED': False,
+    'LOW_POWER': False, 'COMMS_LOST': False,
     'SENSOR_FAULT': False, 'MOTOR_FAULT': False, 'EMERG_STOP': False,
+    'WATCHDOG_FAULT': False,
 }
  
 # task health: name → [priority, status]  (list so it's mutable)
@@ -94,7 +97,8 @@ _tasks: dict = {
     'SelfMonitor':  [4, 'ALIVE'],
     'Sensor':       [3, 'ALIVE'],
     'Navigation':   [2, 'ALIVE'],
-    'Power':        [3, 'ALIVE'],
+    'Power':        [1, 'ALIVE'],
+    'Watchdog':     ['-', 'OK'],
 }
  
 # ═══════════════════════════════════════════════════ parsers ══════════════
@@ -127,6 +131,21 @@ _RE_OBS_XY = re.compile(r'Obstacle at\s*\((-?\d+),\s*(-?\d+)\)')
 _RE_OBS_D  = re.compile(r'Obstacle at\s*(\d+)\s*(?:cm)?\b')
  
  
+def _clear_passed_obstacles(x: int, y: int, hdg: int) -> None:
+    """Remove obstacle markers that are now behind the rover.
+    The rover avoided them already; keeping them causes visual false 'going-through'
+    when the rover later crosses their coordinates from a different approach."""
+    global _obstacles
+    if hdg == 90:    # East  (+x)
+        _obstacles = [(ox, oy) for ox, oy in _obstacles if ox > x]
+    elif hdg == 270: # West  (-x)
+        _obstacles = [(ox, oy) for ox, oy in _obstacles if ox < x]
+    elif hdg == 0:   # North (+y)
+        _obstacles = [(ox, oy) for ox, oy in _obstacles if oy > y]
+    elif hdg == 180: # South (-y)
+        _obstacles = [(ox, oy) for ox, oy in _obstacles if oy < y]
+
+
 def _add_obstacle(ox: int, oy: int) -> None:
     """Store an obstacle, merging readings that fall within OBSTACLE_MERGE cm."""
     for px, py in _obstacles:
@@ -151,15 +170,18 @@ def _parse(line: str) -> None:
             _x = int(m.group(1)); _y = int(m.group(2))
             _hdg  = _HDG.get(m.group(3), 0)
             _path = int(m.group(4)); _obs = int(m.group(5))
-            if _obs >= OBSTACLE_RANGE:
+            _clear_passed_obstacles(_x, _y, _hdg)
+            if _obs >= OBSTACLE_MAP_RANGE:
                 _events['OBSTACLE'] = False
-            elif 0 <= _obs < OBSTACLE_RANGE:
-                # project forward along heading; only record on the rising edge
-                # (obstacle newly detected) so a stationary rover doesn't spam points
-                if not _events['OBSTACLE']:
+                _events['OBS_MAPPED'] = False
+            elif 0 <= _obs < OBSTACLE_MAP_RANGE:
+                # Plot on map on rising edge (first time within map range)
+                if not _events['OBS_MAPPED']:
                     dx, dy = _hdg_vec(_hdg)
                     _add_obstacle(round(_x + dx * _obs), round(_y + dy * _obs))
-                _events['OBSTACLE'] = True
+                    _events['OBS_MAPPED'] = True
+                # OBSTACLE event only fires when critically close
+                _events['OBSTACLE'] = (0 <= _obs < OBSTACLE_RANGE)
  
         m = _RE_ORIG.search(line)
         if m:
@@ -236,6 +258,9 @@ def _parse(line: str) -> None:
         if 'Sensor heartbeat lost'  in line:        _events['SENSOR_FAULT'] = True
         if 'Motor heartbeat lost'   in line:        _events['MOTOR_FAULT']  = True
         if 'EMERGENCY STOP' in line:                _events['EMERG_STOP']   = True
+        if '[Watchdog] TIMEOUT' in line:
+            _events['WATCHDOG_FAULT'] = True
+            _tasks['Watchdog'][1] = 'FAULT'
  
         # task health from SelfMonitor
         m = _RE_FRZ.search(line)
@@ -545,12 +570,13 @@ def _refresh(_n):
  
     # ── badges ──
     badges = [
-        _badge('OBSTACLE',     events['OBSTACLE'],     RED),
-        _badge('LOW POWER',    events['LOW_POWER'],    AMBER),
-        _badge('COMMS LOST',   events['COMMS_LOST'],   AMBER),
-        _badge('SENSOR FAULT', events['SENSOR_FAULT'], AMBER),
-        _badge('MOTOR FAULT',  events['MOTOR_FAULT'],  AMBER),
-        _badge('EMERG STOP',   events['EMERG_STOP'],   RED),
+        _badge('OBSTACLE',      events['OBSTACLE'],      RED),
+        _badge('LOW POWER',     events['LOW_POWER'],     AMBER),
+        _badge('COMMS LOST',    events['COMMS_LOST'],    AMBER),
+        _badge('SENSOR FAULT',  events['SENSOR_FAULT'],  AMBER),
+        _badge('MOTOR FAULT',   events['MOTOR_FAULT'],   AMBER),
+        _badge('EMERG STOP',    events['EMERG_STOP'],    RED),
+        _badge('WATCHDOG FAULT',events['WATCHDOG_FAULT'],RED),
     ]
  
     # ── telemetry cards ──
@@ -623,7 +649,7 @@ def _refresh(_n):
             html.Div([
                 html.Span('● ', style={'color': sc.get(st, DIM)}),
                 html.Span(name, style={'color': FG, 'fontSize': '12px'}),
-                html.Span(f' P{pri} {st}',
+                html.Span(f' {"TIMER" if pri == "-" else f"P{pri}"} {st}',
                           style={'color': sc.get(st, DIM), 'fontSize': '11px',
                                  'float': 'right'}),
             ], style={'overflow': 'hidden'}),
