@@ -29,17 +29,21 @@ python/python3 dashboard.py #to run the project
 The program boots, creates all tasks, seeds the RNG, then starts the FreeRTOS scheduler. Console output is prefixed by task name (e.g. [Motor], [Sensor]).
 
 Project Structure
-
-OperatingSystems-main/
+OperatingSystems/
 ├── src/
-│   ├── main.c              # Entry point — creates IPC primitives and tasks
-│   ├── system.h / system.c # Shared types, handles, and helper functions
-│   ├── main_computer.c/h   # Mission orchestration
-│   ├── motor.c/h           # Motor control and odometry
-│   ├── sensor.c/h          # Sensor simulation
-│   ├── navigation.c/h      # Waypoint mapping
-│   ├── comms.c/h           # Earth communications
-│   ├── power.c/h           # Power budget management
-│   └── self_monitor.c/h    # Watchdog and task recovery
-└── FreeRTOS-Kernel/        # FreeRTOS source (POSIX/GCC port)
-
+│   ├── main.c              # Entry point — IPC primitives, task creation, self-tests
+│   ├── system.h / system.c # Shared types, handles, queues, mutexes, event group
+│   ├── main_computer.c/h   # Mission orchestration — pendingTurn state machine
+│   ├── motor.c/h           # Motor control, dead-reckoning odometry, obstacle detection
+│   ├── sensor.c/h          # Drifting sensor simulation (temp/LIDAR/altitude)
+│   ├── navigation.c/h      # 50-slot ring buffer waypoint map
+│   ├── comms.c/h           # Earth comms — TX telemetry, RX commands, signal loss
+│   ├── power.c/h           # Per-task power estimation, Navigation suspension
+│   ├── self_monitor.c/h    # Heartbeat watchdog, vTaskDelete+xTaskCreate recovery
+│   ├── mct.c/h             # Mission Control Terminal — interactive CLI + fault injection
+│   ├── watchdog.c/h        # 8s one-shot FreeRTOS timer → EVENT_EMERGENCY_STOP
+│   └── FreeRTOSConfig.h    # Tick rate, stack sizes, heap config
+├── FreeRTOS-Kernel/        # FreeRTOS POSIX/GCC port
+├── dashboard.py            # Python Dash GUI — subprocess pipe, live charts, route map
+├── Makefile                # Build system
+└── README.md               # Build and run instructions
