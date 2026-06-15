@@ -127,8 +127,6 @@ int main(void)
     return 0;
 }
 
-/* ── FreeRTOS hook functions ────────────────────────────────── */
-
 void vApplicationMallocFailedHook(void)
 {
     printf("[FreeRTOS] FATAL: Heap allocation failed!\n");

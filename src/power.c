@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 /* Per-subsystem power costs (units) */
-#define POWER_BASE_LOAD          15   /* CPU, memory, standby */
+#define POWER_BASE_LOAD          10   /* CPU, memory, standby */
 #define POWER_MOTOR_COST         40   /* drivetrain when active */
 #define POWER_SENSOR_COST        10
 #define POWER_NAVIGATION_COST    15
@@ -13,7 +13,7 @@
 #define COLD_THRESHOLD_FIXEDPT  -7000
 #define COLD_PENALTY              10
 /* ±3 units of random measurement noise */
-#define POWER_NOISE_RANGE        20
+#define POWER_NOISE_RANGE         6
 
 static uint32_t estimatePowerUsage(void)
 {

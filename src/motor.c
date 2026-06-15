@@ -3,16 +3,66 @@
 #include "watchdog.h"
 #include <stdlib.h>     /* rand() */
 
-/* Obstacle distance is managed by the motor's own physics model.
- * Moving forward decreases it, backward increases it, turning resets it. */
-#define SIM_DIST_INITIAL_CM      90
+#define SIM_DIST_INITIAL_CM     300
 #define SIM_DIST_MIN_CM          20
 #define SIM_DIST_MAX_CM         500
 #define OBSTACLE_THRESHOLD_CM    50
 
+/* 2-D obstacle memory — so the rover respects obstacles it has seen before,
+   even after turning away and returning on the same heading. */
+#define MAX_STORED_OBSTACLES    50
+#define OBSTACLE_MERGE_CM       80
+#define OBSTACLE_PATH_WIDTH     60   /* lateral tolerance to count as "in path" */
+
+#define ABS32(x) ((x) < 0 ? -(x) : (x))
+
+typedef struct { int32_t x; int32_t y; } Obs2D_t;
+static Obs2D_t  knownObstacles[MAX_STORED_OBSTACLES];
+static int      knownObstacleCount = 0;
+
 static int32_t simObstacleDist = SIM_DIST_INITIAL_CM;
 
-/* ── Heading helpers ────────────────────────────────────────── */
+static void recordObstacle(int32_t rx, int32_t ry, int32_t hdg, int32_t dist)
+{
+    int32_t ox, oy;
+    switch (hdg) {
+        case   0: ox = rx;        oy = ry + dist; break;
+        case  90: ox = rx + dist; oy = ry;        break;
+        case 180: ox = rx;        oy = ry - dist; break;
+        case 270: ox = rx - dist; oy = ry;        break;
+        default: return;
+    }
+    for (int i = 0; i < knownObstacleCount; i++)
+        if (ABS32(knownObstacles[i].x - ox) <= OBSTACLE_MERGE_CM &&
+            ABS32(knownObstacles[i].y - oy) <= OBSTACLE_MERGE_CM)
+            return;
+    if (knownObstacleCount < MAX_STORED_OBSTACLES)
+    {
+        knownObstacles[knownObstacleCount].x = ox;
+        knownObstacles[knownObstacleCount].y = oy;
+        knownObstacleCount++;
+    }
+}
+
+static void applyKnownObstacles(int32_t rx, int32_t ry, int32_t hdg)
+{
+    for (int i = 0; i < knownObstacleCount; i++)
+    {
+        int32_t ox = knownObstacles[i].x;
+        int32_t oy = knownObstacles[i].y;
+        int32_t along, lateral;
+        switch (hdg) {
+            case   0: along = oy - ry; lateral = ABS32(ox - rx); break;
+            case  90: along = ox - rx; lateral = ABS32(oy - ry); break;
+            case 180: along = ry - oy; lateral = ABS32(ox - rx); break;
+            case 270: along = rx - ox; lateral = ABS32(oy - ry); break;
+            default: continue;
+        }
+        if (along > 0 && lateral <= OBSTACLE_PATH_WIDTH && along < simObstacleDist)
+            simObstacleDist = along;
+    }
+}
+
 static const char *headingToStr(int32_t deg)
 {
     switch (deg) {
@@ -24,15 +74,11 @@ static const char *headingToStr(int32_t deg)
     }
 }
 
-/* ── Odometry update ────────────────────────────────────────────
- *  Updates x/y position (dead-reckoning) and obstacle distance
- *  based on the executed command. Clamps distance to valid range.
- * ─────────────────────────────────────────────────────────────── */
 static void updateOdometry(const MotorCommand_t *cmd)
 {
-    /* 100% speed for 1000 ms ≈ 100 cm traveled; ±10 cm terrain variation */
+    /* 100% speed for 1000 ms ≈ 100 cm traveled; ±5 cm terrain variation */
     uint32_t moved_cm = (cmd->speed * cmd->duration_ms) / 1000;
-    int32_t  terrain  = (rand() % 21) - 10;
+    int32_t  terrain  = (rand() % 11) - 5;
 
     if (xSemaphoreTake(xOdometryMutex, pdMS_TO_TICKS(50)) != pdTRUE)
         return;
@@ -40,7 +86,6 @@ static void updateOdometry(const MotorCommand_t *cmd)
     switch (cmd->type)
     {
         case CMD_MOVE_FORWARD:
-            /* Clamp movement so rover cannot drive past the obstacle */
             {
                 int32_t clearance = simObstacleDist - SIM_DIST_MIN_CM;
                 if (clearance < 0) clearance = 0;
@@ -56,6 +101,13 @@ static void updateOdometry(const MotorCommand_t *cmd)
                 case 270: xRoverOdometry.x_cm -= (int32_t)moved_cm; break;
             }
             xRoverOdometry.total_dist_cm += moved_cm;
+
+            if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
+                recordObstacle(xRoverOdometry.x_cm, xRoverOdometry.y_cm,
+                               xRoverOdometry.heading_deg, simObstacleDist);
+
+            applyKnownObstacles(xRoverOdometry.x_cm, xRoverOdometry.y_cm,
+                                xRoverOdometry.heading_deg);
             break;
 
         case CMD_MOVE_BACKWARD:
@@ -68,22 +120,23 @@ static void updateOdometry(const MotorCommand_t *cmd)
                 case 270: xRoverOdometry.x_cm += (int32_t)moved_cm; break;
             }
             xRoverOdometry.total_dist_cm += moved_cm;
+
+            applyKnownObstacles(xRoverOdometry.x_cm, xRoverOdometry.y_cm,
+                                xRoverOdometry.heading_deg);
             break;
 
         case CMD_TURN_LEFT:
             xRoverOdometry.heading_deg = (xRoverOdometry.heading_deg - 90 + 360) % 360;
-            if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
-                simObstacleDist = 250 + (rand() % 150);
-            else
-                simObstacleDist += (rand() % 40) - 20;
+            simObstacleDist = 150 + (rand() % 250);
+            applyKnownObstacles(xRoverOdometry.x_cm, xRoverOdometry.y_cm,
+                                xRoverOdometry.heading_deg);
             break;
 
         case CMD_TURN_RIGHT:
             xRoverOdometry.heading_deg = (xRoverOdometry.heading_deg + 90) % 360;
-            if (simObstacleDist < OBSTACLE_THRESHOLD_CM)
-                simObstacleDist = 250 + (rand() % 150);
-            else
-                simObstacleDist += (rand() % 40) - 20;
+            simObstacleDist = 150 + (rand() % 250);
+            applyKnownObstacles(xRoverOdometry.x_cm, xRoverOdometry.y_cm,
+                                xRoverOdometry.heading_deg);
             break;
 
         case CMD_STOP:
@@ -93,7 +146,6 @@ static void updateOdometry(const MotorCommand_t *cmd)
             break;
     }
 
-    /* Hard clamp */
     if (simObstacleDist < SIM_DIST_MIN_CM) simObstacleDist = SIM_DIST_MIN_CM;
     if (simObstacleDist > SIM_DIST_MAX_CM) simObstacleDist = SIM_DIST_MAX_CM;
 
@@ -117,17 +169,13 @@ static void printPosition(void)
 
     float originDist = roverOriginDistance();
 
-
     printf("[Motor] Pos:(%ld, %ld)cm  Heading:%s  Path:%lucm  Obstacle:%ldcm\n",
            (long)x, (long)y,
-
-
            headingToStr(hdg),
            (unsigned long)total,
            (long)simObstacleDist);
 
-
-           printf("[Motor] >> Distance from start: %.1f cm\n", originDist);
+    printf("[Motor] >> Distance from start: %.1f cm\n", originDist);
 }
 
 /* ── Command execution ──────────────────────────────────────── */
@@ -171,14 +219,13 @@ void vMotorTask(void *pvParameters)
     MotorCommand_t cmd;
 
     printf("[Motor] Task started\n");
-    printPosition();   /* report initial position + obstacle distance immediately */
+    printPosition();
 
     for (;;)
     {
         updateHeartbeat(HB_MOTOR);
         feedWatchdog();
 
-        /* Block waiting for a command from MainComputer (500 ms timeout) */
         if (xQueueReceive(xCommandQueue, &cmd, pdMS_TO_TICKS(500)) == pdTRUE)
         {
             if (xSemaphoreTake(xMotorMutex, pdMS_TO_TICKS(200)) == pdTRUE)
@@ -186,13 +233,9 @@ void vMotorTask(void *pvParameters)
                 executeMotorCommand(&cmd);
                 updateOdometry(&cmd);
 
-                /* Show distance from origin only when rover is actually moving */
                 if (cmd.type == CMD_MOVE_FORWARD || cmd.type == CMD_MOVE_BACKWARD)
+                    printPosition();
 
-                
-                printPosition();
-
-                /* Signal obstacle event if too close after a forward move */
                 if (cmd.type == CMD_MOVE_FORWARD &&
                     simObstacleDist < OBSTACLE_THRESHOLD_CM)
                 {

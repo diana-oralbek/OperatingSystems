@@ -67,8 +67,8 @@ _mct_sent:   collections.deque = collections.deque(maxlen=MAX_CMDS)
 # obstacle map (list of (x, y) cm coordinates the rover has detected)
 OBSTACLE_RANGE     = 50    # cm — closer than this triggers OBSTACLE event
 OBSTACLE_MAP_RANGE = 100   # cm — closer than this plots on map
-OBSTACLE_MERGE = 40        # cm — points within this distance are treated as the same obstacle
-MAX_OBSTACLES  = 4
+OBSTACLE_MERGE = 80        # cm — larger radius merges near-duplicate projections
+MAX_OBSTACLES  = 50        # soft cap — stop adding, don't evict old ones
 _obstacles: list = []
  
 # forward unit vector for ANY heading angle (compass bearing: 0°=N=+y, 90°=E=+x)
@@ -113,8 +113,8 @@ _RE_ORIG = re.compile(r'Distance from start:\s*([\d.]+)\s*cm')
 _RE_SENS = re.compile(r'\[Sensor\] Temp:([-\d.]+)\s*C\s+Dist:(\d+)cm\s+Alt:(-?\d+)cm')
 # [Power] Estimated usage: 73 / 100 units
 _RE_PWR  = re.compile(r'\[Power\] Estimated usage:\s*(\d+)')
-# [Navigation] WP#31  Pos:(X,Y)cm  Origin:D.Dcm  Sensor dist:Dcm  Temp:-67.30C
-_RE_WP   = re.compile(r'\[Navigation\] WP#(\d+)\s+Pos:\((-?\d+),(-?\d+)\)cm\s+Origin:([\d.]+)cm\s+Sensor dist:(\d+)cm\s+Temp:([-\d.]+)C')
+# [Navigation] WP#31  Pos:(X,Y)cm  Origin:D.Dcm  Sensor dist:Dcm
+_RE_WP   = re.compile(r'\[Navigation\] WP#(\d+)\s+Pos:\((-?\d+),(-?\d+)\)cm\s+Origin:([\d.]+)cm\s+Sensor dist:(\d+)cm')
 # [Comms] TX >> [Task] Level:N Code:N
 _RE_TX   = re.compile(r'\[Comms\] TX >> \[(\w+)\] Level:(\d+) Code:\d+')
 # [Comms] RX << Earth cmd: FORWARD  speed:65%
@@ -131,29 +131,13 @@ _RE_OBS_XY = re.compile(r'Obstacle at\s*\((-?\d+),\s*(-?\d+)\)')
 _RE_OBS_D  = re.compile(r'Obstacle at\s*(\d+)\s*(?:cm)?\b')
  
  
-def _clear_passed_obstacles(x: int, y: int, hdg: int) -> None:
-    """Remove obstacle markers that are now behind the rover.
-    The rover avoided them already; keeping them causes visual false 'going-through'
-    when the rover later crosses their coordinates from a different approach."""
-    global _obstacles
-    if hdg == 90:    # East  (+x)
-        _obstacles = [(ox, oy) for ox, oy in _obstacles if ox > x]
-    elif hdg == 270: # West  (-x)
-        _obstacles = [(ox, oy) for ox, oy in _obstacles if ox < x]
-    elif hdg == 0:   # North (+y)
-        _obstacles = [(ox, oy) for ox, oy in _obstacles if oy > y]
-    elif hdg == 180: # South (-y)
-        _obstacles = [(ox, oy) for ox, oy in _obstacles if oy < y]
-
-
 def _add_obstacle(ox: int, oy: int) -> None:
     """Store an obstacle, merging readings that fall within OBSTACLE_MERGE cm."""
     for px, py in _obstacles:
         if abs(px - ox) <= OBSTACLE_MERGE and abs(py - oy) <= OBSTACLE_MERGE:
             return
-    if len(_obstacles) >= MAX_OBSTACLES:
-        _obstacles.pop(0)
-    _obstacles.append((ox, oy))
+    if len(_obstacles) < MAX_OBSTACLES:
+        _obstacles.append((ox, oy))
  
  
 def _parse(line: str) -> None:
@@ -168,14 +152,16 @@ def _parse(line: str) -> None:
         m = _RE_POS.search(line)
         if m:
             _x = int(m.group(1)); _y = int(m.group(2))
-            _hdg  = _HDG.get(m.group(3), 0)
+            new_hdg = _HDG.get(m.group(3), 0)
+            if new_hdg != _hdg:
+                _events['OBS_MAPPED'] = False   # re-evaluate obstacle from new heading
+            _hdg  = new_hdg
             _path = int(m.group(4)); _obs = int(m.group(5))
-            _clear_passed_obstacles(_x, _y, _hdg)
             if _obs >= OBSTACLE_MAP_RANGE:
                 _events['OBSTACLE'] = False
                 _events['OBS_MAPPED'] = False
             elif 0 <= _obs < OBSTACLE_MAP_RANGE:
-                # Plot on map on rising edge (first time within map range)
+                # Plot on map on rising edge (first time within map range, per heading)
                 if not _events['OBS_MAPPED']:
                     dx, dy = _hdg_vec(_hdg)
                     _add_obstacle(round(_x + dx * _obs), round(_y + dy * _obs))
@@ -210,8 +196,7 @@ def _parse(line: str) -> None:
         if m:
             _wp_count = int(m.group(1))
             wp = {'n': _wp_count, 'x': int(m.group(2)), 'y': int(m.group(3)),
-                  'orig': float(m.group(4)), 'dist': int(m.group(5)),
-                  'temp': float(m.group(6))}
+                  'orig': float(m.group(4)), 'dist': int(m.group(5))}
             if len(_waypoints) >= MAX_WP:
                 _waypoints.pop(0)
             _waypoints.append(wp)
@@ -440,7 +425,7 @@ app.layout = html.Div([
     html.Div([
         html.Div(
             'NAVIGATION MAP — waypoint scatter'
-            ' (plotly, zoom/pan enabled, hover shows temp + lidar per waypoint)',
+            ' (plotly, zoom/pan enabled, hover shows lidar dist per waypoint)',
             style=_LBL_S,
         ),
         dcc.Graph(id='nav-map',
@@ -715,7 +700,7 @@ def _refresh(_n):
             marker=dict(color=BLUE, size=6,
                         line=dict(color='white', width=0.5)),
             line=dict(color=BLUE, width=1),
-            text=[f"WP #{w['n']}<br>{w['temp']:.1f} °C<br>dist: {w['dist']}cm"
+            text=[f"WP #{w['n']}<br>dist: {w['dist']}cm"
                   for w in wps],
             hoverinfo='text', name='waypoints',
         ))

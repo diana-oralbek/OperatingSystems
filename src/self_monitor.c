@@ -17,7 +17,6 @@ void vSelfMonitorTask(void *pvParameters)
         /* SelfMonitor intentionally does NOT call updateHeartbeat()
            for itself — it is the one checking all others */
 
-        /* MainComputer */
         if (!isTaskAlive(HB_MAIN))
         {
             printf("[SelfMonitor] WARNING: MainComputer appears frozen!\n");
@@ -30,7 +29,6 @@ void vSelfMonitorTask(void *pvParameters)
             printf("[SelfMonitor] MainComputer task restarted\n");
         }
 
-        /* Motor */
         if (!isTaskAlive(HB_MOTOR))
         {
             printf("[SelfMonitor] WARNING: Motor task appears frozen!\n");
@@ -44,7 +42,6 @@ void vSelfMonitorTask(void *pvParameters)
             printf("[SelfMonitor] Motor task restarted\n");
         }
 
-        /* Sensor */
         if (!isTaskAlive(HB_SENSOR))
         {
             printf("[SelfMonitor] WARNING: Sensor task appears frozen!\n");
@@ -58,7 +55,6 @@ void vSelfMonitorTask(void *pvParameters)
             printf("[SelfMonitor] Sensor task restarted\n");
         }
 
-        /* Comms */
         if (!isTaskAlive(HB_COMMS))
         {
             printf("[SelfMonitor] WARNING: Comms task appears frozen!\n");
@@ -82,7 +78,6 @@ void vSelfMonitorTask(void *pvParameters)
                              "Navigation heartbeat lost");
         }
 
-        /* Power */
         if (!isTaskAlive(HB_POWER))
         {
             printf("[SelfMonitor] WARNING: Power task appears frozen!\n");

@@ -3,7 +3,6 @@
 #include "watchdog.h"
 #include <stdlib.h>
 
-/* Silence duration (ms) before declaring Earth signal lost */
 #define COMMS_LOSS_TIMEOUT_MS   3000
 /* Per-cycle probability (0–99) that Earth sends a contact ping */
 #define COMMS_CONTACT_CHANCE    70

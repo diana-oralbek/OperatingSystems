@@ -2,11 +2,8 @@
 #include "navigation.h"
 #include "watchdog.h"
 
-/* Maximum waypoints held in the ring buffer before oldest is overwritten */
 #define MAX_WAYPOINTS   50
 
-/* Each waypoint stores sensor readings plus the rover's position
-   at the moment it was recorded. */
 typedef struct {
     int32_t     x_cm;
     int32_t     y_cm;
@@ -21,7 +18,6 @@ static Waypoint_t   xRouteMap[MAX_WAYPOINTS];
 static uint32_t     xWaypointHead  = 0;
 static uint32_t     xWaypointCount = 0;
 
-/* ── Snapshot current position ──────────────────────────────── */
 static void snapshotPosition(int32_t *out_x, int32_t *out_y)
 {
     *out_x = 0;
@@ -34,7 +30,6 @@ static void snapshotPosition(int32_t *out_x, int32_t *out_y)
     }
 }
 
-/* ── Record waypoint ────────────────────────────────────────── */
 static void recordWaypoint(const SensorData_t *data)
 {
     int32_t x, y;
@@ -61,27 +56,18 @@ static void recordWaypoint(const SensorData_t *data)
     }
 }
 
-/* ── Log waypoint to console ────────────────────────────────── */
 static void logWaypoint(const SensorData_t *data, int32_t x, int32_t y)
 {
     float originDist = roverOriginDistance();
 
-    /* Fixed-point temperature: e.g. -6300 → "-63.00 C" */
-    int32_t  tempInt = data->temperature / 100;
-    int32_t  tempFrac = data->temperature < 0
-                        ? -(data->temperature % 100)
-                        :  (data->temperature % 100);
-
     printf("[Navigation] WP#%lu  Pos:(%ld,%ld)cm  "
-           "Origin:%.1fcm  Sensor dist:%lucm  Temp:%ld.%02ldC\n",
+           "Origin:%.1fcm  Sensor dist:%lucm\n",
            (unsigned long)xWaypointCount,
            (long)x, (long)y,
            originDist,
-           (unsigned long)data->distance_cm,
-           (long)tempInt, (long)tempFrac);
+           (unsigned long)data->distance_cm);
 }
 
-/* ── Task entry point ───────────────────────────────────────── */
 void vNavigationTask(void *pvParameters)
 {
     (void)pvParameters;
@@ -95,7 +81,6 @@ void vNavigationTask(void *pvParameters)
         updateHeartbeat(HB_NAV);
         feedWatchdog();
 
-        /* Wait for a fresh sensor reading from xSensorQueue */
         if (xQueueReceive(xSensorQueue, &data, pdMS_TO_TICKS(300)) == pdTRUE)
         {
             int32_t x, y;
@@ -103,15 +88,6 @@ void vNavigationTask(void *pvParameters)
 
             recordWaypoint(&data);
             logWaypoint(&data, x, y);
-
-            /* Proximity alert — also checked by Motor, but Navigation
-               has the full route context and may detect patterns first */
-            if (data.distance_cm < 50)
-            {
-                xEventGroupSetBits(xSystemEventGroup, EVENT_OBSTACLE_DETECTED);
-                sendStatusReport("Navigation", STATUS_WARNING, 5,
-                                 "Critical proximity — obstacle event raised");
-            }
 
             /* Warn when ring buffer wraps to avoid silent data loss */
             if (xWaypointCount > 0 && (xWaypointCount % MAX_WAYPOINTS) == 0)

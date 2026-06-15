@@ -1,7 +1,7 @@
 #include "system.h"
 #include "watchdog.h"
 
-#define WATCHDOG_TIMEOUT_MS  8000   /* 8 s without a kick = system fault */
+#define WATCHDOG_TIMEOUT_MS  8000
 
 static TimerHandle_t xWatchdogTimer = NULL;
 

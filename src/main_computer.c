@@ -10,7 +10,9 @@ void vMainComputerTask(void *pvParameters)
 {
     (void)pvParameters;
 
-    static bool     pendingTurn = false;
+    static bool     pendingTurn          = false;
+    static int      consecutiveObstacles = 0;
+    static int      forwardCount         = 0;
     MotorCommand_t  cmd;
     EventBits_t     eventBits;
 
@@ -40,23 +42,42 @@ void vMainComputerTask(void *pvParameters)
             xQueueSend(xCommandQueue, &cmd, pdMS_TO_TICKS(100));
             printf("[MainComputer] Obstacle detected — stopping\n");
             xEventGroupClearBits(xSystemEventGroup, EVENT_OBSTACLE_DETECTED);
-            pendingTurn = true;
+            consecutiveObstacles++;
+            forwardCount = 0;
+            pendingTurn  = true;
         }
         else if (pendingTurn)
         {
-            /* One tick after stopping: turn to avoid the obstacle */
-            cmd.type        = (rand() % 2) ? CMD_TURN_LEFT : CMD_TURN_RIGHT;
+            /* Alternate turn direction each obstacle to avoid ping-ponging.
+               After 3+ consecutive obstacles we are likely in a corner:
+               turn right twice (two ticks) to effectively reverse direction. */
+            if (consecutiveObstacles >= 3)
+            {
+                cmd.type             = CMD_TURN_RIGHT;
+                consecutiveObstacles = 1;   /* reset to 1 so next is left */
+                pendingTurn          = true; /* issue a second turn next tick */
+            }
+            else if (consecutiveObstacles % 2 == 1)
+            {
+                cmd.type    = CMD_TURN_RIGHT;
+                pendingTurn = false;
+            }
+            else
+            {
+                cmd.type    = CMD_TURN_LEFT;
+                pendingTurn = false;
+            }
             cmd.speed       = 0;
             cmd.duration_ms = 0;
             xQueueSend(xCommandQueue, &cmd, pdMS_TO_TICKS(100));
             printf("[MainComputer] Obstacle avoidance — turning %s\n",
                    cmd.type == CMD_TURN_LEFT ? "LEFT" : "RIGHT");
             sendStatusReport("MainComputer", STATUS_OK, 0, "Obstacle avoidance turn");
-            pendingTurn = false;
         }
         else if (eventBits & EVENT_LOW_POWER)
         {
-            /* Reduce operations: slow down to conserve energy */
+            consecutiveObstacles = 0;
+            forwardCount++;
             cmd.type        = CMD_MOVE_FORWARD;
             cmd.speed       = 20;
             cmd.duration_ms = 1000;
@@ -65,10 +86,25 @@ void vMainComputerTask(void *pvParameters)
         }
         else
         {
-            /* Normal mission: advance at cruise speed */
-            cmd.type        = CMD_MOVE_FORWARD;
-            cmd.speed       = 50;
-            cmd.duration_ms = 1000;
+            /* Normal mission. Every 8th forward step turn right to sweep
+               a new sector — keeps the rover exploring rather than running
+               the same straight line indefinitely. */
+            consecutiveObstacles = 0;
+            forwardCount++;
+
+            if (forwardCount % 8 == 0)
+            {
+                cmd.type        = CMD_TURN_RIGHT;
+                cmd.speed       = 0;
+                cmd.duration_ms = 0;
+                printf("[MainComputer] Exploration sweep — turning right\n");
+            }
+            else
+            {
+                cmd.type        = CMD_MOVE_FORWARD;
+                cmd.speed       = 50;
+                cmd.duration_ms = 1000;
+            }
             xQueueSend(xCommandQueue, &cmd, pdMS_TO_TICKS(100));
         }
 
