@@ -18,17 +18,71 @@ A simulated Mars rover control system built with FreeRTOS, running on a POSIX po
 
 SelfMonitor checks a heartbeat table updated by every task each cycle. If a task misses its heartbeat for more than 2000 ms it is considered frozen. The Sensor task is automatically deleted and recreated on fault; other tasks log warnings for MainComputer to respond to.
 
+---
+
+## Installation & Setup
+
+### For macOS users
+
+1. **Install Xcode Command Line Tools** (provides GCC and make):
+   ```bash
+   xcode-select --install
+   ```
+
+2. **Install Python 3** (if not already installed) previously:
+   ```bash
+   brew install python
+   ```
+   Or download from [python.org](https://www.python.org/downloads/).
+
+3. **Install Python dependencies**:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+
+---
+
+### Windows
+
+Windows does not natively support POSIX threads, so you will need **WSL (Windows Subsystem for Linux)**.
+
+1. **Install WSL** (run in PowerShell as Administrator):
+   ```powershell
+   wsl --install
+   ```
+   Restart your computer when prompted. This installs Ubuntu by default.
+
+2. **Inside WSL**, install GCC, make, and Python:
+   ```bash
+   sudo apt update
+   sudo apt install gcc make python3 python3-pip
+   ```
+
+3. **Clone or copy the project into WSL**, then install Python dependencies:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+
+> **Note:** Run all build and Python commands from within the WSL terminal(Wsl to run the terminal), not from the standard Windows Command Prompt or PowerShell.
+
+---
+
 ## Building & Running
 
-Requires GCC and pthreads (Linux/macOS or WSL on Windows).
-
 ```bash
-make        # build
-make clean  # remove build artifacts
-python/python3 dashboard.py #to run the project 
-The program boots, creates all tasks, seeds the RNG, then starts the FreeRTOS scheduler. Console output is prefixed by task name (e.g. [Motor], [Sensor]).
+make              # compile the rover binary
+python3 dashboard.py   # launch the dashboard (opens at http://localhost:8050)
+```
 
-Project Structure
+Use `make clean` to remove build artifacts.
+
+The program boots, creates all tasks, seeds the RNG, then starts the FreeRTOS scheduler. Console output is prefixed by task name (e.g. `[Motor]`, `[Sensor]`).
+
+---
+
+## Project Structure
+
+```
 OperatingSystems/
 ├── src/
 │   ├── main.c              # Entry point — IPC primitives, task creation, self-tests
@@ -45,5 +99,7 @@ OperatingSystems/
 │   └── FreeRTOSConfig.h    # Tick rate, stack sizes, heap config
 ├── FreeRTOS-Kernel/        # FreeRTOS POSIX/GCC port
 ├── dashboard.py            # Python Dash GUI — subprocess pipe, live charts, route map
+├── requirements.txt        # Python dependencies
 ├── Makefile                # Build system
-└── README.md               # Build and run instructions
+└── README.md               # This file
+```
